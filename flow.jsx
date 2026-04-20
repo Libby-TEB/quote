@@ -65,6 +65,22 @@ function ServicesStep({ state, setState, onNext, onBack }) {
     const next = { ...selected };
     const turningOn = !next[svc.title];
     if (next[svc.title]) delete next[svc.title]; else next[svc.title] = {};
+
+    // Self Assessment add-ons require the Base return
+    const SA_BASE = 'Self Assessment Tax Return - Base';
+    const SA_ADDONS = [
+      'Self Assessment Tax Return - Additional Sections',
+      'Tax Investigation Protection for your personal tax affairs',
+    ];
+    if (turningOn && SA_ADDONS.includes(svc.title) && !next[SA_BASE]) {
+      // User ticked an add-on but hasn't ticked the base — auto-tick the base
+      next[SA_BASE] = {};
+    }
+    if (!turningOn && svc.title === SA_BASE) {
+      // User unticked the base — clear any add-ons that depend on it
+      SA_ADDONS.forEach(t => { delete next[t]; });
+    }
+
     setState({ selected: next });
     // Pop-up for Auto Enrolment Pension — regulator duties flagged on select
     if (turningOn && svc.title === 'Auto Enrolment Pension') setPensionModal(true);
@@ -74,7 +90,8 @@ function ServicesStep({ state, setState, onNext, onBack }) {
   const grouped = {};
   (window.PRICING || []).forEach(s => {
     if (s.section === 'UN Global Goals - What should we support on your behalf?') return;
-    if (s.section === 'Onboarding Process') return;
+    // Only show AML from the Onboarding Process section (it's required by law)
+    if (s.section === 'Onboarding Process' && !/anti money laundering/i.test(s.title)) return;
     (grouped[s.section] ||= []).push(s);
   });
 
@@ -545,12 +562,19 @@ function ConfigureStep({ state, setState, onNext, onBack }) {
 
   return (
     <Shell footer={
-      <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-        <div style={{ flex: 1, fontFamily: SANS }}>
-          <div style={{ fontSize: 11, color: TEB.inkSoft, textTransform: 'uppercase', letterSpacing: 1.2, fontWeight: 700 }}>Monthly</div>
-          <div style={{ fontFamily: SERIF, fontSize: 22, color: TEB.ink }}>{gbp(monthly)}</div>
-          <div style={{ fontSize: 10.5, color: TEB.muted, marginTop: 1, letterSpacing: 0.2 }}>ex VAT</div>
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+        <div style={{ flex: 1, fontFamily: SANS, minWidth: 0 }}>
+          <div style={{ fontSize: 10, color: TEB.inkSoft, textTransform: 'uppercase', letterSpacing: 1.1, fontWeight: 700 }}>Monthly</div>
+          <div style={{ fontFamily: SERIF, fontSize: 20, color: TEB.ink, lineHeight: 1.1 }}>{gbp(monthly)}</div>
+          <div style={{ fontSize: 10, color: TEB.muted, marginTop: 1, letterSpacing: 0.2 }}>ex VAT</div>
         </div>
+        {oneoff > 0 && (
+          <div style={{ flex: 1, fontFamily: SANS, minWidth: 0 }}>
+            <div style={{ fontSize: 10, color: TEB.inkSoft, textTransform: 'uppercase', letterSpacing: 1.1, fontWeight: 700 }}>One-off</div>
+            <div style={{ fontFamily: SERIF, fontSize: 20, color: TEB.ink, lineHeight: 1.1 }}>{gbp(oneoff)}</div>
+            <div style={{ fontSize: 10, color: TEB.muted, marginTop: 1, letterSpacing: 0.2 }}>ex VAT</div>
+          </div>
+        )}
         <div style={{ flex: 1.2 }}>
           <PrimaryButton label="See my quote" onClick={onNext}/>
         </div>
@@ -619,6 +643,10 @@ function ConfigureStep({ state, setState, onNext, onBack }) {
               )}
               {svc._locked && svc.title === 'Essential software bundle' ? (
                 <EssentialBundleCard/>
+              ) : svc._locked && /anti money laundering/i.test(svc.title) ? (
+                <div style={{ fontSize: 12.5, color: TEB.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
+                  Required by law (MLR 2017) for every new client — verifies each beneficial owner (&gt;25% ownership), anyone with significant control, and the signatory. One-off charge, done via our secure digital portal in minutes.
+                </div>
               ) : svc._locked ? (
                 <div style={{ fontSize: 12.5, color: TEB.inkSoft, marginTop: 8, lineHeight: 1.5 }}>
                   Non-negotiable — covers document capture, bank feeds, tax portal & secure client portal.
@@ -868,7 +896,7 @@ function QuoteStep({ state, setState, onNext, onBack }) {
     }>
       <ScreenHeader eyebrow="Step 4 of 5" step={4} total={5} onBack={onBack}
         title="Your transparent quote"
-        sub="No hidden extras. You can adjust anything on the discovery call."/>
+        sub="Based on what you've told us so far — we'll confirm it together on the call."/>
 
       <div style={{ padding: '18px 24px 10px' }}>
         <div style={{
@@ -907,6 +935,9 @@ function QuoteStep({ state, setState, onNext, onBack }) {
             }}>
               <svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6l3 3 5-6" stroke="#fff" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Transparent pricing · no hidden extras
+            </div>
+            <div style={{ fontSize: 12, opacity: 0.85, marginTop: 10, lineHeight: 1.5, fontFamily: SANS }}>
+              This is an indicative quote — final pricing is always confirmed on the discovery call, once we've understood your business properly.
             </div>
           </div>
         </div>
@@ -1096,18 +1127,13 @@ function DetailsStep({ state, setState, onNext, onBack }) {
           )}
         </div>
 
-        <label style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginTop: 14, cursor: 'pointer' }}>
-          <div style={{
-            width: 22, height: 22, borderRadius: 6, flexShrink: 0,
-            border: `1.5px solid ${TEB.primary}`, background: TEB.primary,
-            display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 1,
-          }}>
-            <svg width="12" height="9" viewBox="0 0 12 9"><path d="M1 4.5L4.5 8L11 1" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/></svg>
-          </div>
-          <div style={{ fontSize: 13, color: TEB.inkSoft, lineHeight: 1.5 }}>
-            I agree to the <u>Engagement Terms</u> and <u>Privacy Policy</u>.
-          </div>
-        </label>
+        <div style={{
+          marginTop: 14, padding: 12, borderRadius: 10,
+          background: TEB.surfaceAlt, border: `1px solid ${TEB.border}`,
+          fontSize: 12, color: TEB.inkSoft, lineHeight: 1.55, fontFamily: SANS,
+        }}>
+          A full Letter of Engagement will be provided before any work begins. Your data is handled in line with our <a href="https://theethicalbookkeeper.co.uk/privacy-policy/" target="_blank" rel="noopener noreferrer" style={{ color: TEB.primary, fontWeight: 500 }}>Privacy Policy</a>.
+        </div>
       </div>
     </Shell>
   );
